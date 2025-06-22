@@ -1,3 +1,7 @@
 .*
-!.gitignore
+*.d
+*.o
+bin
 .vscode
+
+!.gitignore

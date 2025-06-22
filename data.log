@@ -1,0 +1,3 @@
+SET hello STRING world
+SET number INT 42
+DEL number BOOL 1
