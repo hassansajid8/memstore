@@ -1,7 +1,9 @@
-#include "store.hpp"
+#include "store.h"
 #include <iostream>
 #include <fstream>
 #include <string.h>
+#include <thread>
+#include "server.h"
 
 enum class Mode {
     CLI,
@@ -12,7 +14,16 @@ enum class cliArgOptions {
     MODE
 };
 
-void cli();
+void cli(Store store);
+
+std::string getlowercase(std::string str){
+    std::string retval;
+    for(char c : str){
+        retval += std::tolower(c);
+    }
+
+    return retval;
+}
 
 int main(int argc, char *argv[]) {
     Mode mode = Mode::CLI;
@@ -28,35 +39,36 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    Store store;
+    store.load_from_log();
+
     if (mode == Mode::SERVER) {
-        std::cout << "Server mode coming soon..." << std::endl;
-        exit(0);
+        server();
     } else {
-        cli();
+        cli(store);
     }
 
     return 0;
 }
 
-void cli(){
-    std::cout << "Starting CLI mode.." << std::endl;
-
-        Store store;
-        store.load_from_log();
+void cli(Store store){
+    std::cout << "Starting Memstore in CLI mode.." << std::endl;
 
         std::string cmd, key, type;
         while (1) {
             std::cout << "> ";
             std::cin >> cmd;
+            std::string cmd_lower = getlowercase(cmd);
 
-            if (cmd == "SET" || cmd == "set") {
+            if (cmd_lower == "set") {
                 std::string raw_value;
                 Value value;
                 std::cin >> key >> type >> raw_value;
+                type = getlowercase(type);
 
-                if (type == "INT" || type == "int") value = Value(std::stoi(raw_value));
-                else if (type == "DOUBLE" || type == "double") value = Value(std::stod(raw_value));
-                else if (type == "BOOL" || type == "bool") {
+                if (type == "int") value = Value(std::stoi(raw_value));
+                else if (type == "double") value = Value(std::stod(raw_value));
+                else if (type == "bool") {
                     const bool truthy = true;
                     if (raw_value == "true" || raw_value == "1") value = Value(truthy);
                     else if (raw_value == "false" || raw_value == "0") value = Value(!truthy);
@@ -65,7 +77,7 @@ void cli(){
                         continue;
                     }
                 }
-                else if (type == "STRING" || type == "string") value = Value(raw_value);
+                else if (type == "string") value = Value(raw_value);
                 else {
                     std::cout << "Invalid type. Try again." << std::endl;
                     continue;
@@ -73,19 +85,32 @@ void cli(){
 
                 store.set(key, value);
             }
-            else if (cmd == "GET" || cmd == "get") {
+            else if (cmd_lower == "get") {
                 std::cin >> key;
                 store.get(key);
-            } else if (cmd == "DEL" || cmd == "del") {
+            } else if (cmd_lower == "del") {
                 std::cin >> key;
                 store.del(key);
-            } else if (cmd == "EXIT" || cmd == "exit") {
+            } else if (cmd_lower == "exit") {
                 std::cout << "$> Exiting..." << std::endl;
                 break;
-            } else if (cmd == "HELP" || cmd == "help") {
-                std::cout << "Stash - An in-memory key-value store" << std::endl;
+            } else if (cmd_lower == "help") {
+                std::cout << "Memstore - An in-memory key-value store" << std::endl;
                 std::cout << "Available commands: " << std::endl;
-                std::cout << "SET, GET, DEL, EXIT, HELP (Case-insensitive)" << std::endl;
+                
+                // SET description
+                std::cout << "> SET" << std::endl << "\t> -Add new value or update existing one" << std::endl;
+                std::cout << "\t> -Syntax: SET <key_name> <value_type> <value>" << std::endl;
+                std::cout << "\t> -Types available: INT, LONG, DOUBLE, BOOL, STRING" << std::endl;
+                std::cout << "\t> -In case of multi-word string values, enclose them in double quotes\"\"" << std::endl;
+
+                // GET description
+                std::cout << "> GET" << std::endl << "\t> -Display value of existing key on the console." << std::endl;
+                std::cout << "\t -Syntax: GET <key_name>" << std::endl;
+
+                // DEL description
+                std::cout << "> DEL" << std::endl << "\r> -Delete existing key-value pair." << std::endl;
+                std::cout << "\t> -Syntax: DEL <key_name>" << std::endl;
             } else {
                 std::cout << "Unknown command. Type HELP to get list of available commands" << std::endl;
             }

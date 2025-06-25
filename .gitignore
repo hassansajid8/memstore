@@ -3,5 +3,6 @@
 *.o
 bin
 .vscode
+data.log
 
 !.gitignore

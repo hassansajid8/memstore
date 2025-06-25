@@ -1,4 +1,4 @@
-#include "store.hpp"
+#include "store.h"
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -86,7 +86,7 @@ void Store::load_from_log() {
             }
             
             map[key] = value;
-        } else if (op == "DELETE") {
+        } else if (op == "DEL") {
             map.erase(key);
         }
     }

@@ -1,4 +1,4 @@
-#include "value.hpp"
+#include <value.h>
 
 void Value::clear(){
     if(val_type == ValueType::STRING){
@@ -7,7 +7,6 @@ void Value::clear(){
     }
     val_type = ValueType::NONE;
 }
-
 
 // constructor overloads for value type
 Value::Value(){
