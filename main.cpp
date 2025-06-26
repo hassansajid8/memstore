@@ -63,8 +63,23 @@ void cli(Store store){
             if (cmd_lower == "set") {
                 std::string raw_value;
                 Value value;
-                std::cin >> key >> type >> raw_value;
+                std::cin >> key >> type;
                 type = getlowercase(type);
+
+                std::cin >> std::ws;
+
+                // check for multi-word string value
+                if(type == "string" && std::cin.peek() == '"'){
+                    // consume double quotes
+                    std::cin.get();
+                    std::string str_val;
+                    getline(std::cin >> std::ws, str_val, '"');
+
+                    value = Value("\"" + str_val + "\"");
+                    store.set(key, value);
+                    continue;
+                }
+                std::cin >> raw_value;
 
                 if (type == "int") value = Value(std::stoi(raw_value));
                 else if (type == "double") value = Value(std::stod(raw_value));
@@ -80,6 +95,8 @@ void cli(Store store){
                 else if (type == "string") value = Value(raw_value);
                 else {
                     std::cout << "Invalid type. Try again." << std::endl;
+                    std::cin.clear();
+                    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
                     continue;
                 }
 
@@ -114,5 +131,8 @@ void cli(Store store){
             } else {
                 std::cout << "Unknown command. Type HELP to get list of available commands" << std::endl;
             }
+
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         }
 }
