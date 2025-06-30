@@ -43,7 +43,10 @@ int main(int argc, char *argv[]) {
     store.load_from_log();
 
     if (mode == Mode::SERVER) {
-        server();
+        ServerOptions options;
+        options.load_options();
+        
+        server(store, options);
     } else {
         cli(store);
     }

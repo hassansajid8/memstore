@@ -1,3 +1,9 @@
 SET hello STRING world
-SET number INT 42
-DEL number BOOL 1
+SET truthy BOOL 1
+SET truthy BOOL 0
+DEL truthy BOOL 1
+SET data INT 23
+SET hello STRING world
+SET multiword STRING "hello
+SET str STRING hello
+SET multiword STRING "hello world"
