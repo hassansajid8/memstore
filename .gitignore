@@ -4,5 +4,7 @@
 bin
 .vscode
 data.log
+*.env
+*.conf
 
 !.gitignore

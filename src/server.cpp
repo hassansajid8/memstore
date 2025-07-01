@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <store.h>
 #include <fstream>
+#include <crypto.h>
 
 void ServerOptions::load_options() {
     std::ifstream conf("server.conf");
@@ -49,40 +50,52 @@ std::unordered_map<std::string, std::string> getHeaders(const char *buf);
 void printHeaders(std::unordered_map<std::string, std::string>);
 
 void server(Store store, ServerOptions options){
+
+    // setup encryption module
+    TEA tea;
+
+    // setup variables
     int sockfd, new_sockfd, pid;
     struct sockaddr_in address;
     long valread;
     int addrlen = sizeof(address);
 
+    // create server socket
     if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
         perror("$> Error creating socket.");
         exit(EXIT_FAILURE);
     }
 
+    // set socket to reuse address // only for development 
     int optval = 1;
     if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
         perror("$> Error setting socket options.");
         exit(EXIT_FAILURE);
     }
     
+    // setup server address
     address.sin_family = INADDR_ANY;
     address.sin_port = htons(options.port);
     address.sin_addr.s_addr = INADDR_ANY;
 
+    // bind socket to server address
     if(bind(sockfd, (struct sockaddr *)&address, sizeof(address)) < 0){
         perror("$> Error binding socket.");
         close(sockfd);
         exit(EXIT_FAILURE);
     }
 
+    // listen on socket
     if(listen(sockfd, 10) < 0){
         perror("$> Error listening.");
         exit(EXIT_FAILURE);
     }
 
+    // accept connections loop
     while(1){
-        std::cout << "Waiting for new connection" << std::endl;
+        std::cout << "Waiting for new connection..." << std::endl;
 
+        // accept incoming connection
         if((new_sockfd = accept(sockfd, (struct sockaddr*)&address, (socklen_t*)&addrlen)) < 0){
             perror("$> Error accepting connection.");
             exit(EXIT_FAILURE);
@@ -97,7 +110,7 @@ void server(Store store, ServerOptions options){
             exit(EXIT_FAILURE);
         }
 
-        if(pid == 0){
+        if(pid == 0){ // in child process
             char buffer[30000] = {0};
             std::string json, msg;
             size_t bytes_sent;
