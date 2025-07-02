@@ -1,5 +1,5 @@
 ## Memstore - In-Memory Key Value Store
-Fast access/retrieval key-value-pair based database that stores data entirely in the RAM.
+Fast access/retrieval key-value pair based database that stores data entirely in the RAM.
 Similar in concept to Redis and Memcached.
 
 ---
@@ -23,7 +23,7 @@ Memstore utilizes the unordered_map from C++ STL for storing data in-memory. Per
 - 1.3 Authorization: Program can be configured for request authorization.
 
 - 1.4 Encryption: Data can be encrypted using a tiny encryption algorithm (TEA) when transmitted over HTTP.
-*encryption and authorization need to be activated using a server.conf file. See section 3.*
+*encryption and authorization need to be activated using a server.conf file.*
 
 ---
 
