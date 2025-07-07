@@ -118,7 +118,9 @@ Memstore has 3 basic commands:
 
 
 ## 4.0 Server (In development)
-*==under construction==*
+==under construction==
+
+
 
 ## 5.0 Contribute
 - You can submit issues, bugs, ideas and suggestions through the Issues tab.
