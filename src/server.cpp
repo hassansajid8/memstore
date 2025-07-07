@@ -13,13 +13,25 @@
 #include <store.h>
 #include <fstream>
 #include <crypto.h>
+#include <utils.h>
+
+std::string getRequestMethod(std::string req);
+std::string getRoute(std::string req);
+std::unordered_map<std::string, std::string> getHeaders(std::string req);
+std::unordered_map<std::string, std::string> getParams(std::string route);
+std::string getAuthKey();
+
+void printHeaders(std::unordered_map<std::string, std::string>);
+
 
 void ServerOptions::load_options() {
     std::ifstream conf("server.conf");
     
+    // default options
     port = 8080;
     allowed_origins = "*/*";
-    authenticate = false;
+    authorize = false;
+    encrypt = false;
     
     // parse server.config
     if(!conf.is_open()){
@@ -28,31 +40,30 @@ void ServerOptions::load_options() {
         std::string option_name, value;
 
         while(conf >> option_name >> value){
-            if(option_name == "PORT"){
-                port = std::stoi(value);
-            } else if (option_name == "ALLOWED_ORIGINS"){
-                allowed_origins = value;
-            } else if (option_name == "AUTHENTICATE"){
-                if(value == "TRUE" || value == "1"){
-                    authenticate = true;
-                } else {
-                    authenticate = false;
-                }
+            if(option_name == "PORT") port = std::stoi(value);
+            else if (option_name == "ALLOWED_ORIGINS")allowed_origins = value;
+            else if (option_name == "AUTHORIZE"){
+                authorize = (value == "TRUE" || value == "1") ? true : false;
+                auth_key = getAuthKey();                
+            } else if(option_name == "ENCRYPTION"){
+                encrypt = (value == "TRUE" || value == "1") ? true : false;
             }
         }
     }
+
+    // log server options
+    std::cout << "$> Server configured with options: " << std::endl;
+    std::cout << "\tPORT: " << port << std::endl;
+    std::cout << "\tAllowed Origins: " << allowed_origins << std::endl;
+    std::cout << "\tAuthentication: " << authorize << std::endl;
+    std::cout << "\tEncryption: " << encrypt << std::endl;
 }
 
-std::string getRequestMethod(const char *buf);
-std::string getRoute(const char *buf);
-std::unordered_map<std::string, std::string> getHeaders(const char *buf);
-
-void printHeaders(std::unordered_map<std::string, std::string>);
 
 void server(Store store, ServerOptions options){
 
-    // setup encryption module
-    TEA tea;
+    // setup encryption 
+    // TEA tea;
 
     // setup variables
     int sockfd, new_sockfd, pid;
@@ -101,7 +112,7 @@ void server(Store store, ServerOptions options){
             exit(EXIT_FAILURE);
         }
 
-        std::cout << "recieved new connection." << std::endl;
+        std::cout << "$> Recieved new connection." << std::endl;
 
         // create child process to handle multiple requests at once
         pid = fork();
@@ -115,20 +126,27 @@ void server(Store store, ServerOptions options){
             std::string json, msg;
             size_t bytes_sent;
 
-            valread = read(new_sockfd, buffer, 30000);
-            
-            std::unordered_map<std::string, std::string> headers = getHeaders(buffer);
+            ssize_t valread = recv(new_sockfd, buffer, sizeof(buffer), 0);
+            if(valread < 0){
+                perror("$> Error in recv.");
+                exit(EXIT_FAILURE);
+            }
 
-            if(options.authenticate){
+            std::string request(buffer, valread);
+            std::cout << request << std::endl;
+            
+            std::unordered_map<std::string, std::string> headers = getHeaders(request);
+
+            if(options.authorize){
                 if(headers.find("Authorization") == headers.end()){
                     std::cout << "Unauthorized request recieved." << std::endl;
-                    std::cout << "Origin: " << headers["Origin"] << std::endl;
+                    std::cout << "Host: " << headers["Host"] << std::endl;
 
                     json = R"({ "status": 403, "message": "Unauthorized"})";
                     msg = 
                         "HTTP/1.1 403 Unauthorized\r\n"
                         "Content-type: application/json\r\n"
-                        "Content=length: " + std::to_string(sizeof(json)) + "\r\n"
+                        "Content-length: " + std::to_string(json.size()) + "\r\n"
                         "WWW-Authenticate: Basic\r\n"
                         "\r\n" +
                         json;
@@ -140,20 +158,64 @@ void server(Store store, ServerOptions options){
                     continue;
                 } else {
                     // verify authentication
+                    std::string auth_mode = getlowercase(headers["Authorization"].substr(0, 5));
+                    std::string recieved_key = headers["Authorization"].substr(6);
+
+                    if(auth_mode != "basic"){
+                        json = R"({ "status": 403, "message": "Unauthorized"})";
+                        msg = 
+                            "HTTP/1.1 403 Unauthorized\r\n"
+                            "Content-type: application/json\r\n"
+                            "Content-length: " + std::to_string(json.size()) + "\r\n"
+                            "WWW-Authenticate: Basic\r\n"
+                            "\r\n" +
+                            json;
+
+                        bytes_sent = send(new_sockfd, msg.c_str(), (size_t)msg.length(), 0);
+                        std::cout << "Bytes sent: " << bytes_sent << std::endl;
+
+                        close(new_sockfd);
+                        continue;
+                    }
+
+                    if(recieved_key != options.auth_key){
+                        json = R"({ "status": 403, "message": "Unauthorized"})";
+                        msg = 
+                            "HTTP/1.1 403 Unauthorized\r\n"
+                            "Content-type: application/json\r\n"
+                            "Content-length: " + std::to_string(json.size()) + "\r\n"
+                            "WWW-Authenticate: Basic\r\n"
+                            "\r\n" +
+                            json;
+
+                        bytes_sent = send(new_sockfd, msg.c_str(), (size_t)msg.length(), 0);
+                        std::cout << "Bytes sent: " << bytes_sent << std::endl;
+
+                        close(new_sockfd);
+                        continue;
+                    }
                 }
             }
 
             // get method
-            std::string method = getRequestMethod(buffer);
+            std::string method = getRequestMethod(request);
             std::cout << "Method = " << method << std::endl;
 
             if(method == "GET"){
-                std::string route = getRoute(buffer);
+                std::string route = getRoute(request);
                 std::cout << "Route = " << route << std::endl;
 
+                // default route
                 if(route == "/"){
-
-                    json = R"({ "route": "/", "name": "Home page" })";
+                    json = R"( {
+                    "project": "Memstore",
+                    "description": "Simple in-memory key-value database written in C++",
+                    "routes": {
+                        "/get": "Method: GET. Returns value to a given key. Key is passed as query parameter.",
+                        "/set": "Method: POST. Creates new or updates existing entry.",
+                        "/del": "Method: GET. Deletes an entry. Key is passed as query parameter."
+                    }                    
+                    } )";
                     msg = 
                         "HTTP/1.1 200 OK\r\n"
                         "Content-type: application/json\r\n"
@@ -164,8 +226,30 @@ void server(Store store, ServerOptions options){
                     bytes_sent = send(new_sockfd, msg.c_str(), (size_t)msg.length(), 0);
                     std::cout << "Bytes sent = " << bytes_sent << std::endl;
 
-                } else {
-                    msg = "HTTP/1.1 403 Forbidden\r\n";
+                }
+                // get route
+                else if(route.rfind("/get", 0) == 0){
+                    std::unordered_map<std::string, std::string> params = getParams(route);
+
+                    if(params.count("key") == 0){
+                        // return error
+                    }
+                    else {
+                        json = R"( {"value": "some_value"} )";
+                        msg = 
+                            "HTTP/1.1 200 OK\r\n"
+                            "Content-type: application/json\r\n"
+                            "Content-length:" + std::to_string(json.size()) + "\r\n"
+                            "\r\n"
+                            + json;
+    
+                        bytes_sent = send(new_sockfd, msg.c_str(), (size_t)msg.length(), 0);
+                        std::cout << "Bytes sent = " << bytes_sent << std::endl;
+                    }
+
+                } 
+                else {
+                    msg = "HTTP/1.1 404 Not Found\r\n";
                     bytes_sent = send(new_sockfd, msg.c_str(), (size_t)msg.length(), 0);
                     std::cout << "Bytes sent = " << bytes_sent << std::endl;                    
                 }
@@ -188,35 +272,35 @@ void server(Store store, ServerOptions options){
     return;
 }
 
-std::string getRequestMethod(const char *buf){
+std::string getRequestMethod(std::string req){
     int i = 0;
     std::string method;
-    while(buf[i] != ' '){
-        method += buf[i];
+    while(req[i] != ' '){
+        method += req[i];
         i++;
     }
 
     return method;
 }
 
-std::string getRoute(const char *buf){
+std::string getRoute(std::string req){
     int i;
     std::string route;
 
-    for(i=0;buf[i]!=' ';i++);
+    for(i=0;req[i]!=' ';i++);
     i++;
 
-    while(buf[i] != ' '){
-        route += buf[i];
+    while(req[i] != ' '){
+        route += req[i];
         i++;
     }
 
     return route;
 }
 
-std::unordered_map<std::string, std::string> getHeaders(const char *buf) {
+std::unordered_map<std::string, std::string> getHeaders(std::string req) {
     std::unordered_map<std::string, std::string> map;
-    std::istringstream stream(buf);
+    std::istringstream stream(req);
     std::string line;
 
     // skip the request line (GET / HTTP/1.1)
@@ -241,6 +325,60 @@ std::unordered_map<std::string, std::string> getHeaders(const char *buf) {
     }
 
     return map;
+}
+
+std::unordered_map<std::string, std::string> getParams(std::string route) {
+    std::unordered_map<std::string, std::string> params;
+    size_t i = 0;
+
+    while (route[i] && route[i] != '?') i++;
+
+    if (!route[i]) return params;
+    i++;
+
+    while (route[i]) {
+        std::string name;
+        std::string value;
+
+        while (route[i] && route[i] != '=') {
+            name += route[i++];
+        }
+
+        if (route[i] == '=') i++;
+
+        while (route[i] && route[i] != '&') {
+            value += route[i++];
+        }
+
+        if (route[i] == '&') i++;
+
+        params[name] = value;
+    }
+
+    return params;
+}
+
+std::string getAuthKey(){
+    std::string name, value;
+    bool keyfound = false;
+    std::ifstream envfile(".env");
+
+    if(!envfile.is_open()){
+        perror(".env file not found. Aborting.");
+        exit(EXIT_FAILURE);
+    }
+
+    while(envfile >> name >> value){
+        if(name == "AUTH_KEY"){
+            keyfound = true;
+            return value;
+        }
+    }
+
+    if(!keyfound){
+        perror("AUTH_KEY not found in .env. Aborting.");
+        exit(EXIT_FAILURE);
+    }
 }
 
 void printHeaders(std::unordered_map<std::string, std::string> map){

@@ -6,7 +6,9 @@ class ServerOptions {
     public:
         int port;
         std::string allowed_origins;
-        bool authenticate;
+        std::string auth_key;
+        bool authorize;
+        bool encrypt;
 
         void load_options();
 };
