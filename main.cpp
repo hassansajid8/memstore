@@ -1,9 +1,10 @@
-#include "store.h"
+#include <store.h>
 #include <iostream>
 #include <fstream>
 #include <string.h>
 #include <thread>
-#include "server.h"
+#include <server.h>
+#include <utils.h>
 
 enum class Mode {
     CLI,
@@ -15,15 +16,6 @@ enum class cliArgOptions {
 };
 
 void cli(Store store);
-
-std::string getlowercase(std::string str){
-    std::string retval;
-    for(char c : str){
-        retval += std::tolower(c);
-    }
-
-    return retval;
-}
 
 int main(int argc, char *argv[]) {
     Mode mode = Mode::CLI;
