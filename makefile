@@ -24,4 +24,7 @@ $(BINARY): $(OBJECTS)
 clean:
 	rm -rf $(BINARY) $(DEPFILES) $(OBJECTS)
 
+distribute: clean
+	tar zvcf dist.tgz *
+
 -include $(DEPFILES)
