@@ -209,7 +209,7 @@ void server(Store store, ServerOptions options){
 
                 // default route
                 if(route == "/"){
-                    json = R"( {
+                    json = R"({
                     "project": "Memstore",
                     "description": "Simple in-memory key-value database written in C++",
                     "routes": {
@@ -217,7 +217,7 @@ void server(Store store, ServerOptions options){
                         "/set": "Method: POST. Creates new or updates existing entry.",
                         "/del": "Method: GET. Deletes an entry. Key is passed as query parameter."
                     }                    
-                    } )";
+                    })";
                     msg = 
                         "HTTP/1.1 200 OK\r\n"
                         "Content-type: application/json\r\n"
@@ -233,7 +233,7 @@ void server(Store store, ServerOptions options){
                     std::unordered_map<std::string, std::string> params = getParams(route);
 
                     if(params.find("key") == params.end()){
-                        json = R"( {message: Insufficient request} )";
+                        json = R"( {"message": "Invalid request params"} )";
                         msg = 
                             "HTTP/1.1 400 Bad Request\r\n"
                             "Content-type: application/json\r\n"
@@ -245,7 +245,7 @@ void server(Store store, ServerOptions options){
                     else{
                         std::string val = store.get(params["key"]);
                         if(val == "404"){
-                            json = R"({ message: Key not found})";
+                            json = R"({ "message": "Key not found"})";
                             msg = 
                                 "HTTP/1.1 404 Not Found\r\n"
                                 "Content-type: application/json\r\n"
@@ -266,6 +266,44 @@ void server(Store store, ServerOptions options){
                     bytes_sent = send(new_sockfd, msg.c_str(), (size_t)msg.length(), 0);
                     std::cout << "Bytes sent = " << bytes_sent << std::endl;
                 } 
+                else if(route.rfind("/del", 0) == 0){
+                    std::unordered_map<std::string, std::string> params = getParams(route);
+
+                    if(params.find("key") == params.end()){
+                        json = R"( {"message": "Invalid request params"} )";
+                        msg = 
+                            "HTTP/1.1 400 Bad Request\r\n"
+                            "Content-type: application/json\r\n"
+                            "Content-length:" + std::to_string(json.size()) + "\r\n"
+                            "\r\n"
+                            + json;
+    
+                    }
+                    else{
+                        std::string val = store.get(params["key"]);
+                        if(val == "404"){
+                            json = R"({ "message": "Key not found"})";
+                            msg = 
+                                "HTTP/1.1 404 Not Found\r\n"
+                                "Content-type: application/json\r\n"
+                                "Content-length:" + std::to_string(json.size()) + "\r\n"
+                                "\r\n"
+                                + json;
+                        }
+                        else{
+                            store.del(params["key"]);
+                            json = R"({"message": "Success"})";
+                            msg = 
+                                "HTTP/1.1 200 OK\r\n"
+                                "Content-type: application/json\r\n"
+                                "Content-length:" + std::to_string(json.size()) + "\r\n"
+                                "\r\n"
+                                + json;
+                        }
+                    }
+                    bytes_sent = send(new_sockfd, msg.c_str(), (size_t)msg.length(), 0);
+                    std::cout << "Bytes sent = " << bytes_sent << std::endl;
+                }
                 else {
                     msg = "HTTP/1.1 404 Not Found\r\n";
                     bytes_sent = send(new_sockfd, msg.c_str(), (size_t)msg.length(), 0);
