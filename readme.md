@@ -1,6 +1,6 @@
 ## Memstore - In-Memory Key Value Store
 Fast access/retrieval key-value pair based database that stores data entirely in the RAM.
-Similar in concept to Redis and Memcached.
+Similar in concept to Redis and Memcached. Only works on linux-based systems or WSL.
 
 ---
 
@@ -28,7 +28,7 @@ Memstore utilizes the unordered_map from C++ STL for storing data in-memory. Per
 ---
 
 ## 2.0 Usage
-*Server requires linux to run (as of yet)*
+*Only works on linux-based systems or WSL.*
 
 ### 2.1 Prerequisites 
 - Makefile
