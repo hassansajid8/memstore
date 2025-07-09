@@ -22,8 +22,8 @@ Memstore utilizes the unordered_map from C++ STL for storing data in-memory. Per
 
 - 1.3 Authorization: Program can be configured for request authorization.
 
-- 1.4 Encryption: Data can be encrypted using a tiny encryption algorithm (TEA) when transmitted over HTTP.
-*encryption and authorization need to be activated using a server.conf file.*
+- 1.4 Encryption: Data can be encrypted using a tiny encryption algorithm (TEA) when transmitted over HTTP. This feature is not implemented yet.
+*encryption and authorization need to be activated using a server.conf file. See section 4*
 
 ---
 
@@ -117,9 +117,45 @@ Memstore has 3 basic commands:
 *all commands are case-insensitive*
 
 
-## 4.0 Server (In development)
-==under construction==
+## 4.0 Server 
+There are 3 GET routes and 1 POST route accessible over HTTP for interacting with the database.
 
+- **4.1 Server configuration:**
+    - Server configuration is done using a server.conf file present in the root of the project.
+    - Syntax for writing config options: <option_name> <option_value>
+    *option_name has to be in uppercase*
+    - Configurable options:
+        1. PORT: default is 8080
+        2. AUTHORIZE: default is 0
+            - Value can be either 1 (enabled) or 0 (disabled).
+            - If 1, server will require an Authorization header in incoming requests with Basic credentials.
+            - If 1, the program requires an AUTH_KEY in a .env file. Syntax for env variables in .env file is same as in server.conf file. 
+            - The credential is a non-whitespace token that is matched with the key specified in the .env file.
+        3. ENCRYPTION: default is 0
+            - Value can be either 1 (enabled) or 0 (disabled).
+            - **Not implemented yet.**
+            - If 1, program requires a KEY in .env file. Key is strictly a 16 byte no-whitespace token (16 characters).
+            - Encryption is done using a handwritten Tiny Encryption Algo (TEA). It is not much secure.
+        4. server.config example:
+            ```bash
+                PORT 5177
+                AUTHORIZE 1
+                ENCRYPTION 0
+            ```
+
+- **4.2 Server routes:**
+    There are 3 GET routes and 1 POST route accessible over HTTP for interacting with the database.
+    - GET routes:
+        1. /: Home route. Returns a json response describing the API. 
+        2. /get (?key=some_key): Fetches the value for an existing key. Params are required as specified.
+        3. /del (?key=some_key): Deletes an existing key-value pair. Params are required as specified.
+    - POST routes:
+        1. /set: Creates a new entry, or updates an existing one.
+            - As of now, this route only accepts data of x-www-form-urlencoded type.
+            - Required data:
+                - "key": key name
+                - "value": value of the item
+                - "type": type of the value. Can be "int", "double", "float", "bool" or "string".
 
 
 ## 5.0 Contribute
