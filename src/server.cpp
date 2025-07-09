@@ -14,15 +14,18 @@
 #include <fstream>
 #include <crypto.h>
 #include <utils.h>
+#include <limits>
 
 std::string getRequestMethod(std::string req);
 std::string getRoute(std::string req);
 std::unordered_map<std::string, std::string> getHeaders(std::string req);
 std::unordered_map<std::string, std::string> getParams(std::string route);
 std::string getAuthKey();
+std::string getRequestBody(std::string);
+std::unordered_map<std::string, std::string> getUrlEncodedFormData(std::string);
+bool verifyData(std::unordered_map<std::string, std::string>);
 
 void printHeaders(std::unordered_map<std::string, std::string>);
-
 
 void ServerOptions::load_options() {
     std::ifstream conf("server.conf");
@@ -133,7 +136,6 @@ void server(Store store, ServerOptions options){
             }
 
             std::string request(buffer, valread);
-            std::cout << request << std::endl;
             
             std::unordered_map<std::string, std::string> headers = getHeaders(request);
 
@@ -197,12 +199,12 @@ void server(Store store, ServerOptions options){
                 }
             }
 
-            // get method
+            // routes
             std::string method = getRequestMethod(request);
+            std::string route = getRoute(request);
             std::cout << "Method = " << method << std::endl;
 
             if(method == "GET"){
-                std::string route = getRoute(request);
                 std::cout << "Route = " << route << std::endl;
 
                 // default route
@@ -225,28 +227,44 @@ void server(Store store, ServerOptions options){
 
                     bytes_sent = send(new_sockfd, msg.c_str(), (size_t)msg.length(), 0);
                     std::cout << "Bytes sent = " << bytes_sent << std::endl;
-
                 }
-                // get route
+                // /get?key=value
                 else if(route.rfind("/get", 0) == 0){
                     std::unordered_map<std::string, std::string> params = getParams(route);
 
-                    if(params.count("key") == 0){
-                        // return error
-                    }
-                    else {
-                        json = R"( {"value": "some_value"} )";
+                    if(params.find("key") == params.end()){
+                        json = R"( {message: Insufficient request} )";
                         msg = 
-                            "HTTP/1.1 200 OK\r\n"
+                            "HTTP/1.1 400 Bad Request\r\n"
                             "Content-type: application/json\r\n"
                             "Content-length:" + std::to_string(json.size()) + "\r\n"
                             "\r\n"
                             + json;
     
-                        bytes_sent = send(new_sockfd, msg.c_str(), (size_t)msg.length(), 0);
-                        std::cout << "Bytes sent = " << bytes_sent << std::endl;
                     }
-
+                    else{
+                        std::string val = store.get(params["key"]);
+                        if(val == "404"){
+                            json = R"({ message: Key not found})";
+                            msg = 
+                                "HTTP/1.1 404 Not Found\r\n"
+                                "Content-type: application/json\r\n"
+                                "Content-length:" + std::to_string(json.size()) + "\r\n"
+                                "\r\n"
+                                + json;
+                        }
+                        else{
+                            json = R"( {")" + params["key"] + R"(": ")" + store.get(params["key"]) + R"("})";
+                            msg = 
+                                "HTTP/1.1 200 OK\r\n"
+                                "Content-type: application/json\r\n"
+                                "Content-length:" + std::to_string(json.size()) + "\r\n"
+                                "\r\n"
+                                + json;
+                        }
+                    }
+                    bytes_sent = send(new_sockfd, msg.c_str(), (size_t)msg.length(), 0);
+                    std::cout << "Bytes sent = " << bytes_sent << std::endl;
                 } 
                 else {
                     msg = "HTTP/1.1 404 Not Found\r\n";
@@ -255,13 +273,87 @@ void server(Store store, ServerOptions options){
                 }
             }
             else if(method == "POST"){
-                json = R"({ method: POST })";
-                msg = 
-                    "HTTP/1.1 200 OK\r\n"
-                    "Content-type: application/json\r\n"
-                    "Content-length:" + std::to_string(json.size()) + "\r\n"
-                    "\r\n"
-                    + json;
+
+                if(route == "/set"){
+                    std::string content_type = headers["Content-Type"];
+                    std::string body;
+                    std::unordered_map<std::string, std::string> data;
+
+                    if(content_type == "application/x-www-form-urlencoded"){
+                        body = getRequestBody(request);
+                        data = getUrlEncodedFormData(body);
+
+                        if(!verifyData(data)){
+                            std::cout << "data didnt pass verification" << std::endl;
+                            json = R"({ "message": "Invalid or insufficient data" })";
+                            msg = "HTTP/1.1 400 Bad Request\r\n"
+                                "Content-Type: application/json\r\n"
+                                "Content-length:" + std::to_string(json.size()) + "\r\n"
+                                "\r\n"
+                                + json;
+                        } else {
+                            std::string key = data["key"];
+                            Value value;
+                            std::string type = getlowercase(data["type"]);
+                            std::string raw_value = data["value"];
+                            bool invalid_type = false;
+
+                            if (type == "int") value = Value(std::stoi(raw_value));
+                            else if (type == "double") value = Value(std::stod(raw_value));
+                            else if (type == "bool") {
+                                const bool truthy = true;
+                                if (raw_value == "true" || raw_value == "1") value = Value(truthy);
+                                else if (raw_value == "false" || raw_value == "0") value = Value(!truthy);
+                                else invalid_type = true;
+                            }
+                            else if (type == "string") value = Value(raw_value);
+                            else invalid_type = true; 
+
+                            if(invalid_type){
+                                json = R"({ "message": "Invalid or insufficient data" })";
+                                msg = "HTTP/1.1 400 Bad Request\r\n"
+                                    "Content-Type: application/json\r\n"
+                                    "Content-length:" + std::to_string(json.size()) + "\r\n"
+                                    "\r\n"
+                                    + json; 
+                            } else{
+                                // set values
+                                store.set(data["key"], value);
+                                json = R"({ "message": "Success" })";
+                                msg = "HTTP/1.1 200 OK\r\n"
+                                    "Content-Type: application/json\r\n"
+                                    "Content-Length:" + std::to_string(json.size()) + "\r\n"
+                                    "\r\n"
+                                    + json;
+                            }
+
+                        }
+                    }
+
+                    if(msg.size() <= 0){
+                        json = R"({ "message": "Some error occurred" })";
+                        msg = 
+                            "HTTP/1.1 500 Server Error\r\n"
+                            "Content-type: application/json\r\n"
+                            "Content-length:" + std::to_string(json.size()) + "\r\n"
+                            "\r\n"
+                            + json;
+                        }
+
+                    bytes_sent = send(new_sockfd, msg.c_str(), (size_t)msg.length(), 0);
+                    std::cout << "Bytes sent = " << bytes_sent << std::endl;
+                }
+                else {
+                    std::cout << "POST request on non-existing route\n";
+                    json = R"({"message": "POST Route does not exist"})";
+                    msg = "HTTP/1.1 404 Not Found\r\n"
+                        "Content-Type: application/json\r\n"
+                        "Content-Length: " + std::to_string(json.size()) + "\r\n"
+                        "\r\n"
+                        + json;
+                    bytes_sent = send(new_sockfd, msg.c_str(), (size_t)msg.length(), 0);
+                    std::cout << "Bytes sent = " << bytes_sent << std::endl;     
+                }
             }
             close(new_sockfd);
         } else {
@@ -356,6 +448,86 @@ std::unordered_map<std::string, std::string> getParams(std::string route) {
     }
 
     return params;
+}
+
+std::string getRequestBody(std::string req){
+    int i = 0;
+    std::string body = "";
+
+    // traverse to beginning of request body
+    while(req[i]){
+        if(req[i] == '\r' && req[i+1] == '\n'){
+            i += 2;
+            if(req[i] == '\r' && req[i+1] == '\n'){
+                i+=2;
+                break;
+            }
+
+        }
+        i++;
+    }
+
+    while(req[i]){
+        body += req[i];
+        i++;
+    }
+    return body;
+}
+
+std::unordered_map<std::string, std::string> getUrlEncodedFormData(std::string body) {
+    std::unordered_map<std::string, std::string> params;
+    size_t i = 0;
+
+    while (body[i]) {
+        std::string name;
+        std::string value;
+
+        while (body[i] && body[i] != '=') {
+            name += body[i++];
+        }
+
+        if (body[i] == '=') i++;
+
+        while (body[i] && body[i] != '&') {
+            value += body[i++];
+        }
+
+        if (body[i] == '&') i++;
+
+        params[name] = value;
+    }
+
+    return params;
+}
+
+bool verifyData(std::unordered_map<std::string, std::string> data) {
+    // check if key exists
+    if(data.find("key") == data.end()) return false;
+
+    // check if value exists
+    if(data.find("value") == data.end()) return false;
+
+    // check if type exists
+    if(data.find("type") == data.end()) return false;
+
+    // verify type
+    std::string type = getlowercase(data["type"]);
+    
+    if(type == "bool"){
+        std::string val = data["value"];
+        if(val == "0"){}
+        else if(val == "false") {}
+        else if(val == "1") {}
+        else if(val == "true") {}
+        else return false;
+    }
+    else if(type == "int") {}
+    else if(type == "double") {}
+    else if(type == "long") {}
+    else if(type == "string") {}
+    else return false;
+
+    return true;
 }
 
 std::string getAuthKey(){

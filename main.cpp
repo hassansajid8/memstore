@@ -99,7 +99,7 @@ void cli(Store store){
             }
             else if (cmd_lower == "get") {
                 std::cin >> key;
-                store.get(key);
+                std:: cout << store.get(key) << std::endl;
             } else if (cmd_lower == "del") {
                 std::cin >> key;
                 store.del(key);

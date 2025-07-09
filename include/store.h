@@ -16,6 +16,6 @@ public:
     void append_to_log(Operation op, std::string key, const Value value);
 
     void set(std::string key, Value value);
-    void get(std::string key);
+    std::string get(std::string key);
     void del(std::string key);
 };

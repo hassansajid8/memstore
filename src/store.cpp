@@ -8,11 +8,11 @@ void Store::set(std::string key, Value value){
     append_to_log(Operation::SET, key, value);
 }
 
-void Store::get(std::string key){
+std::string Store::get(std::string key){
     if(map.find(key) != map.end()){
-        std::cout << map[key].to_string() << std::endl;
+        return map[key].to_string();
     } else {
-        std::cout << "$> Key not found" << std::endl;
+        return "404";
     }
 }
 
